@@ -10,8 +10,9 @@ public static class ValidationCodes
     public const string TooLong = "validation.too_long";
     public const string OutOfRange = "validation.out_of_range";
     public const string InvalidValue = "validation.invalid_value";
+    public const string InThePast = "validation.in_the_past";
 
-    public static IReadOnlyList<string> All => [Required, TooLong, OutOfRange, InvalidValue];
+    public static IReadOnlyList<string> All => [Required, TooLong, OutOfRange, InvalidValue, InThePast];
 }
 
 public sealed record FieldError(string Code, IReadOnlyDictionary<string, object?>? Params = null);
@@ -23,9 +24,12 @@ public sealed record FieldError(string Code, IReadOnlyDictionary<string, object?
 /// <item><c>errorCodes</c>: field → codes with params (for clients that translate messages themselves)</item>
 /// </list>
 /// </summary>
-public sealed class ValidationErrors
+public sealed class ValidationErrors(DateOnly today)
 {
     private readonly Dictionary<string, List<(string Message, FieldError Error)>> _errors = [];
+
+    /// <summary>Today's date (UTC), for rules like "must not be in the past".</summary>
+    public DateOnly Today { get; } = today;
 
     public bool HasErrors => _errors.Count > 0;
 
@@ -45,6 +49,17 @@ public sealed class ValidationErrors
     public ValidationErrors Required(string field, string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? Add(field, $"'{field}' is required.", ValidationCodes.Required)
+            : this;
+
+    public ValidationErrors Required<T>(string field, T? value) where T : struct =>
+        value is null
+            ? Add(field, $"'{field}' is required.", ValidationCodes.Required)
+            : this;
+
+    public ValidationErrors NotInPast(string field, DateOnly? value) =>
+        value < Today
+            ? Add(field, $"'{field}' can't be in the past.", ValidationCodes.InThePast,
+                new Dictionary<string, object?> { ["today"] = Today })
             : this;
 
     public ValidationErrors MaxLength(string field, string? value, int max) =>

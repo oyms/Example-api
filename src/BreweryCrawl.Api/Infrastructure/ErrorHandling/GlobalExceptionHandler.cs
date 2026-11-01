@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 
 namespace BreweryCrawl.Api.Infrastructure.ErrorHandling;
 
@@ -27,7 +28,7 @@ public sealed class GlobalExceptionHandler(
                 logger.LogWarning("Upstream failure: {Reason}", exception.Message);
                 break;
             default:
-                logger.LogInformation("Bad request: {Detail}", detail);
+                logger.LogInformation("Request rejected ({ErrorCode}): {Detail}", definition.Code, detail);
                 break;
         }
 
@@ -59,6 +60,9 @@ public sealed class GlobalExceptionHandler(
         // Its StatusCode can also be 413 (body too large), 415 (wrong content type) etc.
         BadHttpRequestException { StatusCode: StatusCodes.Status400BadRequest } bad => (CommonErrors.MalformedRequest, bad.Message),
         BadHttpRequestException bad => (CommonErrors.ForStatus(bad.StatusCode), bad.Message),
+
+        // Two requests changed the same crawl at the same time, and this one lost (see Crawl.Version).
+        DbUpdateConcurrencyException => (CommonErrors.ConcurrencyConflict, CommonErrors.ConcurrencyConflict.Description),
 
         UpstreamException { Failure: UpstreamFailure.Timeout } up =>
             (CommonErrors.UpstreamTimeout, $"{up.Service} did not respond in time."),

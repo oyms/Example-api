@@ -52,7 +52,12 @@ public static class ErrorHandlingSetup
             problem.Title = definition.Title;
             problem.Detail ??= definition.Description;
         }
+
+        // Picked up by the request log line, so the log shows which error was returned.
+        context.HttpContext.Items[ErrorCodeItemKey] = problem.Extensions["errorCode"];
     }
+
+    public const string ErrorCodeItemKey = "ErrorCode";
 
     public static string GetTraceId(HttpContext httpContext) =>
         Activity.Current?.TraceId.ToHexString()

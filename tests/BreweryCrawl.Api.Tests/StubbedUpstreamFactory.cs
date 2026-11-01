@@ -30,14 +30,13 @@ public sealed class StubUpstream : HttpMessageHandler
 /// API with a stubbed upstream and short timeouts. Create one per test, since the circuit breaker
 /// and the cache keep state for the lifetime of the app.
 /// </summary>
-public sealed class StubbedUpstreamFactory(string dataSource) : WebApplicationFactory<Program>
+public sealed class StubbedUpstreamFactory(string dataSource) : TestApiFactory(dataSource)
 {
     public StubUpstream Upstream { get; } = new();
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Production");
-        builder.UseSetting("Breweries:DataSource", dataSource);
+        base.ConfigureWebHost(builder);
         builder.UseSetting("OpenBreweryDb:AttemptTimeout", "00:00:00.200");
         builder.UseSetting("OpenBreweryDb:TotalTimeout", "00:00:02");
         builder.ConfigureTestServices(services => services

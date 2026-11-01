@@ -7,13 +7,13 @@ public interface IValidatable
 }
 
 /// <summary>Validates the endpoint argument of type <typeparamref name="T"/> before the handler runs.</summary>
-public sealed class ValidationFilter<T>(ILogger<ValidationFilter<T>> logger) : IEndpointFilter where T : IValidatable
+public sealed class ValidationFilter<T>(TimeProvider timeProvider, ILogger<ValidationFilter<T>> logger) : IEndpointFilter where T : IValidatable
 {
     public async ValueTask<object?> InvokeAsync(EndpointFilterInvocationContext context, EndpointFilterDelegate next)
     {
         if (context.Arguments.OfType<T>().FirstOrDefault() is { } argument)
         {
-            var errors = new ValidationErrors();
+            var errors = new ValidationErrors(DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime));
             argument.Validate(errors);
             if (errors.HasErrors)
             {

@@ -1,4 +1,7 @@
 using BreweryCrawl.Api.Features.Breweries;
+using BreweryCrawl.Api.Features.Crawls;
+using BreweryCrawl.Api.Infrastructure.Auth;
+using BreweryCrawl.Api.Infrastructure.RateLimiting;
 using BreweryCrawl.Api.Infrastructure.Validation;
 using Microsoft.AspNetCore.Http.HttpResults;
 
@@ -10,7 +13,14 @@ namespace BreweryCrawl.Api.Infrastructure.ErrorHandling;
 /// </summary>
 public static class ErrorCatalogEndpoints
 {
-    public static IReadOnlyList<ErrorDefinition> All { get; } = [.. CommonErrors.All, .. BreweryErrors.All];
+    public static IReadOnlyList<ErrorDefinition> All { get; } =
+    [
+        .. CommonErrors.All,
+        HeaderAuthenticationHandler.Unauthenticated,
+        RateLimitingSetup.RateLimited,
+        .. BreweryErrors.All,
+        .. CrawlErrors.All,
+    ];
 
     public sealed record ErrorCatalog(IReadOnlyList<ErrorDefinition> Errors, IReadOnlyList<string> ValidationCodes);
 

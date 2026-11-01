@@ -21,6 +21,10 @@ public static class CommonErrors
         "request.method_not_allowed", StatusCodes.Status405MethodNotAllowed, "Method not allowed",
         "The endpoint exists, but does not support this HTTP method.");
 
+    public static readonly ErrorDefinition ConcurrencyConflict = new(
+        "request.concurrency_conflict", StatusCodes.Status409Conflict, "Changed by someone else",
+        "Someone else changed the same data at the same time. Fetch it again and retry.");
+
     public static readonly ErrorDefinition Unexpected = new(
         "server.unexpected", StatusCodes.Status500InternalServerError, "An unexpected error occurred",
         "Something went wrong on our side. Use the traceId when reporting the problem.");
@@ -51,7 +55,7 @@ public static class CommonErrors
 
     public static IEnumerable<ErrorDefinition> All =>
     [
-        ValidationFailed, MalformedRequest, RouteNotFound, MethodNotAllowed,
+        ValidationFailed, MalformedRequest, RouteNotFound, MethodNotAllowed, ConcurrencyConflict,
         Unexpected, UpstreamUnavailable, UpstreamCircuitOpen, UpstreamTimeout, ErrorCodeNotFound,
     ];
 }

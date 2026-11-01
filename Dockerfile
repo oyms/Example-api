@@ -10,5 +10,6 @@ WORKDIR /app
 COPY --from=build /app .
 USER $APP_UID
 ENV ASPNETCORE_HTTP_PORTS=8080
+ENV ConnectionStrings__Crawls="Data Source=/home/app/crawls.db"
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "BreweryCrawl.Api.dll"]

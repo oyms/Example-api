@@ -6,7 +6,7 @@ namespace BreweryCrawl.Api.Infrastructure.Chaos;
 /// Reads the requested chaos modes for /api requests and applies the ones that affect the request itself.
 /// Upstream modes are applied by <see cref="ChaosUpstreamHandler"/>.
 /// </summary>
-public sealed class ChaosMiddleware(RequestDelegate next, IConfiguration configuration, ILogger<ChaosMiddleware> logger)
+public sealed class ChaosMiddleware(RequestDelegate next, IConfiguration configuration, TimeProvider timeProvider, ILogger<ChaosMiddleware> logger)
 {
     private readonly TimeSpan _slowDelay = configuration.GetValue("Chaos:SlowDelay", TimeSpan.FromSeconds(5));
 
@@ -26,7 +26,7 @@ public sealed class ChaosMiddleware(RequestDelegate next, IConfiguration configu
         }
 
         var mode = ChaosMode.None;
-        var errors = new ValidationErrors();
+        var errors = new ValidationErrors(DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime));
         foreach (var value in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             if (Chaos.Modes.TryGetValue(value, out var parsed))
