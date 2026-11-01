@@ -1,0 +1,12 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      # Live | LiveWithFallback | Offline
+      Breweries__DataSource: LiveWithFallback
+      # Set to true to include exception type, message and stack trace in 500 responses.
+      ErrorHandling__IncludeExceptionDetails: "false"
+      # text | json
+      Logging__Format: text
