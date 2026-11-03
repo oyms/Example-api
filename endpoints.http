@@ -1,0 +1,368 @@
+# Requests for every endpoint and every error situation.
+#
+# Works with the REST Client extension in VS Code and with Visual Studio / Rider (2024.3+).
+# Requests marked "# @name" can be referenced by later requests, e.g. {{myCrawl.response.body.$.id}},
+# so run them from top to bottom within a section.
+#
+# Watch the API's log output while you run these: every response carries a traceId that matches a log line.
+
+@root_url = http://localhost:8080
+@portland_brewery = 936c3d7e-5d54-4459-b72c-117cdda059b4
+@portland_brewery_2 = 45249b6e-b1d0-4c2f-a60e-ab483169287f
+@closed_brewery = 08155729-56b6-4a82-a43e-5b458dd01c2e
+@san_diego_brewery = 5fdcc498-f9df-4fa5-b35d-487a59f0fecc
+
+
+###############################################################################
+# Basics
+###############################################################################
+
+### Health check
+GET {{root_url}}/health
+
+### OpenAPI document (the Scalar UI is at /scalar)
+GET {{root_url}}/openapi/v1.json
+
+### Reset the database to the seed data
+POST {{root_url}}/admin/reset
+
+
+###############################################################################
+# Error catalog: every errorCode the API can return
+###############################################################################
+
+### All error codes
+GET {{root_url}}/errors
+
+### One error code (this is what the "type" URI in a ProblemDetails points to)
+GET {{root_url}}/errors/crawl.version_mismatch
+
+### 404 error.not_found: unknown error code
+GET {{root_url}}/errors/does.not_exist
+
+
+###############################################################################
+# Breweries (read only, no user needed)
+# The X-Data-Source response header says where the data came from: live, cache or snapshot.
+###############################################################################
+
+### List breweries
+GET {{root_url}}/api/breweries
+
+### Filter and page
+GET {{root_url}}/api/breweries?city=portland&type=brewpub&page=1&perPage=5
+
+### Search by name
+GET {{root_url}}/api/breweries?name=breakside
+
+### Get one brewery
+GET {{root_url}}/api/breweries/{{portland_brewery}}
+
+### 404 brewery.not_found
+GET {{root_url}}/api/breweries/no-such-brewery
+
+### 400 validation.failed: one field wrong (see "errors" and "errorCodes")
+GET {{root_url}}/api/breweries?type=winery
+
+### 400 validation.failed: several fields wrong at once
+GET {{root_url}}/api/breweries?type=winery&page=0&perPage=500
+
+### 400 request.malformed: page is not a number
+GET {{root_url}}/api/breweries?page=two
+
+
+###############################################################################
+# Crawls: reading (no user needed)
+###############################################################################
+
+### List crawls (oldest first)
+# @name crawls
+GET {{root_url}}/api/crawls
+
+### Filter by city
+GET {{root_url}}/api/crawls?city=portland
+
+### Get one crawl (the ETag header holds its version)
+GET {{root_url}}/api/crawls/{{crawls.response.body.$[0].id}}
+
+### 404 crawl.not_found
+GET {{root_url}}/api/crawls/00000000-0000-0000-0000-000000000000
+
+### 404 request.not_found: the id is not a guid, so no route matches
+GET {{root_url}}/api/crawls/not-a-guid
+
+
+###############################################################################
+# Crawls: the happy path
+# Users are faked with the X-User header. alice and bob own the seed crawls, but any name works.
+###############################################################################
+
+### Create a crawl
+# @name myCrawl
+POST {{root_url}}/api/crawls
+X-User: alice
+Content-Type: application/json
+
+{
+  "name": "Workshop warm-up",
+  "city": "Portland",
+  "date": "2030-06-01"
+}
+
+### Get it
+GET {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}
+
+### Add a stop, using the ETag from when we created it
+# @name addStop
+POST {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}/stops
+X-User: alice
+If-Match: {{myCrawl.response.headers.ETag}}
+Content-Type: application/json
+
+{
+  "breweryId": "{{portland_brewery}}"
+}
+
+### Add another stop, using the ETag from the previous change
+# @name addStop2
+POST {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}/stops
+X-User: alice
+If-Match: {{addStop.response.headers.ETag}}
+Content-Type: application/json
+
+{
+  "breweryId": "{{portland_brewery_2}}"
+}
+
+### Rename it
+# @name renamed
+PUT {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}
+X-User: alice
+If-Match: {{addStop2.response.headers.ETag}}
+Content-Type: application/json
+
+{
+  "name": "Workshop warm-up (renamed)",
+  "date": "2030-06-02"
+}
+
+### Remove a stop
+DELETE {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}/stops/{{portland_brewery_2}}
+X-User: alice
+
+
+###############################################################################
+# Crawls: errors
+# Run "Create a crawl" above first. Most of these use that crawl.
+# Rejected requests also count toward the rate limit on creating crawls, so the bad creates below use different users.
+###############################################################################
+
+### 401 auth.unauthenticated: no X-User header
+POST {{root_url}}/api/crawls
+Content-Type: application/json
+
+{
+  "name": "Anonymous crawl",
+  "city": "Portland",
+  "date": "2030-06-01"
+}
+
+### 401 auth.unauthenticated: invalid user name
+POST {{root_url}}/api/crawls
+X-User: not a valid name!
+Content-Type: application/json
+
+{
+  "name": "Crawl",
+  "city": "Portland",
+  "date": "2030-06-01"
+}
+
+### 403 crawl.not_owner: bob tries to rename alice's crawl
+PUT {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}
+X-User: bob
+Content-Type: application/json
+
+{
+  "name": "Bob was here",
+  "date": "2030-06-01"
+}
+
+### 412 crawl.version_mismatch: the ETag from when the crawl was created is out of date by now
+PUT {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}
+X-User: alice
+If-Match: {{myCrawl.response.headers.ETag}}
+Content-Type: application/json
+
+{
+  "name": "Overwriting someone else's change",
+  "date": "2030-06-01"
+}
+
+### 409 crawl.duplicate_stop: the brewery is already a stop
+POST {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}/stops
+X-User: alice
+Content-Type: application/json
+
+{
+  "breweryId": "{{portland_brewery}}"
+}
+
+### 422 crawl.brewery_wrong_city: a San Diego brewery on a Portland crawl
+POST {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}/stops
+X-User: alice
+Content-Type: application/json
+
+{
+  "breweryId": "{{san_diego_brewery}}"
+}
+
+### 422 crawl.brewery_not_open: the brewery has closed
+POST {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}/stops
+X-User: alice
+Content-Type: application/json
+
+{
+  "breweryId": "{{closed_brewery}}"
+}
+
+### 422 crawl.unknown_brewery: the brewery is in the body, not the URL, so this is 422 and not 404
+POST {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}/stops
+X-User: alice
+Content-Type: application/json
+
+{
+  "breweryId": "no-such-brewery"
+}
+
+### 422 crawl.in_the_past: alice's seed crawl from last summer can't be changed
+# (Run "GET /api/crawls" in the reading section first: the oldest crawl is listed first.)
+POST {{root_url}}/api/crawls/{{crawls.response.body.$[0].id}}/stops
+X-User: alice
+Content-Type: application/json
+
+{
+  "breweryId": "{{portland_brewery_2}}"
+}
+
+### 404 crawl.stop_not_found
+DELETE {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}/stops/no-such-brewery
+X-User: alice
+
+### 400 validation.failed: missing and too long fields, date in the past
+POST {{root_url}}/api/crawls
+X-User: dave
+Content-Type: application/json
+
+{
+  "name": "",
+  "city": "Portlandddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+  "date": "2020-01-01"
+}
+
+### 400 request.malformed: broken JSON
+POST {{root_url}}/api/crawls
+X-User: erin
+Content-Type: application/json
+
+{ "name": "Missing the closing brace"
+
+### 400 request.malformed: date in the wrong format
+POST {{root_url}}/api/crawls
+X-User: frank
+Content-Type: application/json
+
+{
+  "name": "Crawl",
+  "city": "Portland",
+  "date": "01.06.2030"
+}
+
+### 415 http.415: not JSON
+POST {{root_url}}/api/crawls
+X-User: grace
+Content-Type: text/plain
+
+Just some text
+
+### 405 request.method_not_allowed: PATCH is not supported
+PATCH {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}
+X-User: alice
+Content-Type: application/json
+
+{}
+
+### 429 request.rate_limited: send this 4 times within a minute (the limit is 3 new crawls per user per minute)
+POST {{root_url}}/api/crawls
+X-User: carol
+Content-Type: application/json
+
+{
+  "name": "Spam crawl",
+  "city": "Portland",
+  "date": "2030-06-01"
+}
+
+
+###############################################################################
+# Chaos: simulate failures with the X-Chaos header (or ?chaos=). Combine modes with commas.
+###############################################################################
+
+### 500 server.unexpected: the API itself fails
+GET {{root_url}}/api/breweries
+X-Chaos: fail
+
+### Slow response (5 seconds): try a loading spinner, or cancel the request
+GET {{root_url}}/api/breweries
+X-Chaos: slow
+
+### Flaky: fails half of the time, so try a retry in the frontend
+GET {{root_url}}/api/breweries
+X-Chaos: flaky
+
+### Chaos as a query parameter instead of a header
+GET {{root_url}}/api/breweries?chaos=fail
+
+### 400: unknown chaos mode
+GET {{root_url}}/api/breweries
+X-Chaos: explode
+
+### Open Brewery DB is down, but we fall back to the snapshot: 200 with X-Data-Source: snapshot
+GET {{root_url}}/api/breweries?city=san diego
+X-Chaos: upstream-down
+
+### 502 upstream.unavailable: Open Brewery DB is down and fallback is disabled
+GET {{root_url}}/api/breweries?city=san diego
+X-Chaos: upstream-down, no-fallback
+
+### 504 upstream.timeout: Open Brewery DB doesn't answer in time (takes a few seconds)
+GET {{root_url}}/api/breweries?city=san diego
+X-Chaos: upstream-timeout, no-fallback
+
+### 503 upstream.circuit_open: we've stopped calling Open Brewery DB for a while
+GET {{root_url}}/api/breweries?city=san diego
+X-Chaos: upstream-circuit-open, no-fallback
+
+### Upstream failure while changing data: adding a stop also looks up the brewery
+POST {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}/stops
+X-User: alice
+X-Chaos: upstream-down, no-fallback
+Content-Type: application/json
+
+{
+  "breweryId": "{{san_diego_brewery}}"
+}
+
+### Not JSON-friendly client: errors are still JSON, even when asking for HTML
+GET {{root_url}}/api/breweries
+Accept: text/html
+X-Chaos: fail
+
+
+###############################################################################
+# Clean up
+###############################################################################
+
+### Delete the crawl
+DELETE {{root_url}}/api/crawls/{{myCrawl.response.body.$.id}}
+X-User: alice
