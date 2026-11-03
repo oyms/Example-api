@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using BreweryCrawl.Api.Infrastructure.ErrorHandling;
 using Serilog;
 using Serilog.Events;
@@ -16,6 +17,8 @@ public static class LoggingSetup
     /// </summary>
     public static WebApplicationBuilder AddLogging(this WebApplicationBuilder builder)
     {
+        EnsureRequestActivities();
+
         builder.Services.AddSerilog((services, logger) =>
         {
             logger
@@ -35,6 +38,23 @@ public static class LoggingSetup
 
         return builder;
     }
+
+    private static readonly Lazy<ActivityListener> RequestActivityListener = new(() =>
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "Microsoft.AspNetCore",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.PropagationData,
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    });
+
+    /// <summary>
+    /// ASP.NET Core only creates an Activity per request (and so a W3C trace id) when something listens for it,
+    /// e.g. OpenTelemetry. Listen ourselves, so the TraceId in logs and ProblemDetails is always the same trace id.
+    /// </summary>
+    private static void EnsureRequestActivities() => _ = RequestActivityListener.Value;
 
     /// <summary>
     /// One summary line per request, including the errorCode of any error response and the user.
