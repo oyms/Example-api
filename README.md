@@ -8,7 +8,16 @@ Users can plan **pub crawls**: a list of brewery stops in one city on one date, 
 
 ## Running
 
-With Docker (no .NET SDK needed):
+With Docker, using the published image (no clone or .NET SDK needed):
+
+```sh
+docker run --rm -p 8080:8080 ghcr.io/oyms/example-api
+```
+
+Settings can be passed as environment variables, e.g. `-e Breweries__DataSource=Offline -e Logging__Format=json`.
+Use `docker pull ghcr.io/oyms/example-api` to get the latest version.
+
+With Docker, building from this repo:
 
 ```sh
 docker compose up --build

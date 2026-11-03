@@ -1,4 +1,5 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+# Build on the runner's own platform: the output is platform-neutral, so one build serves both amd64 and arm64.
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY src/BreweryCrawl.Api/BreweryCrawl.Api.csproj src/BreweryCrawl.Api/
 RUN dotnet restore src/BreweryCrawl.Api/BreweryCrawl.Api.csproj
